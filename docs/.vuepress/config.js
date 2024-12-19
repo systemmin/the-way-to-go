@@ -22,8 +22,8 @@ export default defineUserConfig({
 		logo: '/images/logo.svg',
 		navbar: [
 			{
-				text: '官网',
-				link: 'https://openai.com/',
+				text: '文档 GitHub',
+				link: 'https://github.com/systemmin/the-way-to-go.git',
 				target: '_blank'
 			}, {
 				text: '译者 GitHub',
