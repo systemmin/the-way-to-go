@@ -1,0 +1,38 @@
+<template><div><h1 id="_14-9-实现-futures-模式" tabindex="-1"><a class="header-anchor" href="#_14-9-实现-futures-模式"><span>14.9 实现 Futures 模式</span></a></h1>
+<p>所谓 Futures 就是指：有时候在你使用某一个值之前需要先对其进行计算。这种情况下，你就可以在另一个处理器上进行该值的计算，到使用时，该值就已经计算完毕了。</p>
+<p>Futures 模式通过闭包和通道可以很容易实现，类似于生成器，不同地方在于 Futures 需要返回一个值。</p>
+<p>参考条目文献给出了一个很精彩的例子：假设我们有一个矩阵类型，我们需要计算两个矩阵 A 和 B 乘积的逆，首先我们通过函数 <code v-pre>Inverse(M)</code> 分别对其进行求逆运算，再将结果相乘。如下函数 <code v-pre>InverseProduct()</code> 实现了如上过程：</p>
+<div class="language-go line-numbers-mode" data-highlighter="prismjs" data-ext="go" data-title="go"><pre v-pre><code><span class="line"><span class="token keyword">func</span> <span class="token function">InverseProduct</span><span class="token punctuation">(</span>a Matrix<span class="token punctuation">,</span> b Matrix<span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">    a_inv <span class="token operator">:=</span> <span class="token function">Inverse</span><span class="token punctuation">(</span>a<span class="token punctuation">)</span></span>
+<span class="line">    b_inv <span class="token operator">:=</span> <span class="token function">Inverse</span><span class="token punctuation">(</span>b<span class="token punctuation">)</span></span>
+<span class="line">    <span class="token keyword">return</span> <span class="token function">Product</span><span class="token punctuation">(</span>a_inv<span class="token punctuation">,</span> b_inv<span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>在这个例子中，<code v-pre>a</code> 和 <code v-pre>b</code> 的求逆矩阵需要先被计算。那么为什么在计算 <code v-pre>b</code> 的逆矩阵时，需要等待 <code v-pre>a</code> 的逆计算完成呢？显然不必要，这两个求逆运算其实可以并行执行的。换句话说，调用 <code v-pre>Product()</code> 函数只需要等到 <code v-pre>a_inv</code> 和 <code v-pre>b_inv</code> 的计算完成。如下代码实现了并行计算方式：</p>
+<div class="language-go line-numbers-mode" data-highlighter="prismjs" data-ext="go" data-title="go"><pre v-pre><code><span class="line"><span class="token keyword">func</span> <span class="token function">InverseProduct</span><span class="token punctuation">(</span>a Matrix<span class="token punctuation">,</span> b Matrix<span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">    a_inv_future <span class="token operator">:=</span> <span class="token function">InverseFuture</span><span class="token punctuation">(</span>a<span class="token punctuation">)</span>   <span class="token comment">// start as a goroutine</span></span>
+<span class="line">    b_inv_future <span class="token operator">:=</span> <span class="token function">InverseFuture</span><span class="token punctuation">(</span>b<span class="token punctuation">)</span>   <span class="token comment">// start as a goroutine</span></span>
+<span class="line">    a_inv <span class="token operator">:=</span> <span class="token operator">&lt;-</span>a_inv_future</span>
+<span class="line">    b_inv <span class="token operator">:=</span> <span class="token operator">&lt;-</span>b_inv_future</span>
+<span class="line">    <span class="token keyword">return</span> <span class="token function">Product</span><span class="token punctuation">(</span>a_inv<span class="token punctuation">,</span> b_inv<span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p><code v-pre>InverseFuture()</code> 函数以 <code v-pre>goroutine</code> 的形式起了一个闭包，该闭包会将矩阵求逆结果放入到 <code v-pre>future</code> 通道中：</p>
+<div class="language-go line-numbers-mode" data-highlighter="prismjs" data-ext="go" data-title="go"><pre v-pre><code><span class="line"><span class="token keyword">func</span> <span class="token function">InverseFuture</span><span class="token punctuation">(</span>a Matrix<span class="token punctuation">)</span> <span class="token keyword">chan</span> Matrix <span class="token punctuation">{</span></span>
+<span class="line">    future <span class="token operator">:=</span> <span class="token function">make</span><span class="token punctuation">(</span><span class="token keyword">chan</span> Matrix<span class="token punctuation">)</span></span>
+<span class="line">    <span class="token keyword">go</span> <span class="token keyword">func</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">        future <span class="token operator">&lt;-</span> <span class="token function">Inverse</span><span class="token punctuation">(</span>a<span class="token punctuation">)</span></span>
+<span class="line">    <span class="token punctuation">}</span><span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line">    <span class="token keyword">return</span> future</span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>当开发一个计算密集型库时，使用 Futures 模式设计 API 接口是很有意义的。在你的包使用 Futures 模式，且能保持友好的 API 接口。此外，Futures 可以通过一个异步的 API 暴露出来。这样你可以以最小的成本将包中的并行计算移到用户代码中。（参见参考文件 18：<a href="http://www.golangpatterns.info/concurrency/futures" target="_blank" rel="noopener noreferrer">http://www.golangpatterns.info/concurrency/futures</a>）</p>
+<h2 id="链接" tabindex="-1"><a class="header-anchor" href="#链接"><span>链接</span></a></h2>
+<ul>
+<li><RouteLink to="/chapter-3/directory.html">目录</RouteLink></li>
+<li>上一节：<RouteLink to="/chapter-3/14.8.html">惰性生成器的实现</RouteLink></li>
+<li>下一节：<RouteLink to="/chapter-3/14.10.html">复用</RouteLink></li>
+</ul>
+</div></template>
+
+

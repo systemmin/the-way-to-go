@@ -1,0 +1,26 @@
+{
+  "name": "the-way-to-go",
+  "version": "1.0.0",
+  "description": "The Way to Go，通过 go 之路",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vuepress dev docs",
+    "build": "vuepress build docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/bxmms/open-ai-doc.git"
+  },
+  "author": "Mr.Fang",
+  "license": "ISC",
+  "devDependencies": {
+    "@vuepress/bundler-vite": "^2.0.0-rc.19",
+    "@vuepress/plugin-register-components": "^2.0.0-beta.60",
+    "@vuepress/theme-default": "^2.0.0-rc.66",
+    "sass-embedded": "^1.83.0",
+    "vuepress": "^2.0.0-rc.19"
+  }
+}

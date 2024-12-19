@@ -1,0 +1,68 @@
+<template><div><h1 id="_14-17-使用通道并发访问对象" tabindex="-1"><a class="header-anchor" href="#_14-17-使用通道并发访问对象"><span>14.17 使用通道并发访问对象</span></a></h1>
+<p>为了保护对象被并发访问修改，我们可以使用协程在后台顺序执行匿名函数来替代使用同步互斥锁。在下面的程序中我们有一个类型 <code v-pre>Person</code> 中包含一个字段 <code v-pre>chF</code> ，这是一个用于存放匿名函数的通道。</p>
+<p>这个结构在构造函数 <code v-pre>NewPerson()</code> 中初始化的同时会启动一个后台协程 <code v-pre>backend()</code>。<code v-pre>backend()</code> 方法会在一个无限循环中执行 <code v-pre>chF</code> 中放置的所有函数，有效地将它们序列化从而提供了安全的并发访问。更改和读取 <code v-pre>salary</code> 的方法会通过将一个匿名函数写入 <code v-pre>chF</code> 通道中，然后让 <code v-pre>backend()</code> 按顺序执行以达到其目的。需注意的是 <code v-pre>Salary()</code> 方法创建的闭包函数是如何将 <code v-pre>fChan</code> 通道包含在其中的。</p>
+<p>当然，这是一个简化的例子，它不应该被用在这种案例下。但是它却向我们展示了在更复杂的场景中该如何解决这种问题。</p>
+<p>示例：14.19-<a href="examples/chapter_14/conc_access.go">conc_access.go</a></p>
+<div class="language-go line-numbers-mode" data-highlighter="prismjs" data-ext="go" data-title="go"><pre v-pre><code><span class="line"><span class="token keyword">package</span> main</span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">import</span> <span class="token punctuation">(</span></span>
+<span class="line">	<span class="token string">"fmt"</span></span>
+<span class="line">	<span class="token string">"strconv"</span></span>
+<span class="line"><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">type</span> Person <span class="token keyword">struct</span> <span class="token punctuation">{</span></span>
+<span class="line">	Name   <span class="token builtin">string</span></span>
+<span class="line">	salary <span class="token builtin">float64</span></span>
+<span class="line">	chF    <span class="token keyword">chan</span> <span class="token keyword">func</span><span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">NewPerson</span><span class="token punctuation">(</span>name <span class="token builtin">string</span><span class="token punctuation">,</span> salary <span class="token builtin">float64</span><span class="token punctuation">)</span> <span class="token operator">*</span>Person <span class="token punctuation">{</span></span>
+<span class="line">	p <span class="token operator">:=</span> <span class="token operator">&amp;</span>Person<span class="token punctuation">{</span>name<span class="token punctuation">,</span> salary<span class="token punctuation">,</span> <span class="token function">make</span><span class="token punctuation">(</span><span class="token keyword">chan</span> <span class="token keyword">func</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+<span class="line">	<span class="token keyword">go</span> p<span class="token punctuation">.</span><span class="token function">backend</span><span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line">	<span class="token keyword">return</span> p</span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token punctuation">(</span>p <span class="token operator">*</span>Person<span class="token punctuation">)</span> <span class="token function">backend</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token keyword">for</span> f <span class="token operator">:=</span> <span class="token keyword">range</span> p<span class="token punctuation">.</span>chF <span class="token punctuation">{</span></span>
+<span class="line">		<span class="token function">f</span><span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line">	<span class="token punctuation">}</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment">// Set salary.</span></span>
+<span class="line"><span class="token keyword">func</span> <span class="token punctuation">(</span>p <span class="token operator">*</span>Person<span class="token punctuation">)</span> <span class="token function">SetSalary</span><span class="token punctuation">(</span>sal <span class="token builtin">float64</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">	p<span class="token punctuation">.</span>chF <span class="token operator">&lt;-</span> <span class="token keyword">func</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> p<span class="token punctuation">.</span>salary <span class="token operator">=</span> sal <span class="token punctuation">}</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment">// Retrieve salary.</span></span>
+<span class="line"><span class="token keyword">func</span> <span class="token punctuation">(</span>p <span class="token operator">*</span>Person<span class="token punctuation">)</span> <span class="token function">Salary</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">float64</span> <span class="token punctuation">{</span></span>
+<span class="line">	fChan <span class="token operator">:=</span> <span class="token function">make</span><span class="token punctuation">(</span><span class="token keyword">chan</span> <span class="token builtin">float64</span><span class="token punctuation">)</span></span>
+<span class="line">	p<span class="token punctuation">.</span>chF <span class="token operator">&lt;-</span> <span class="token keyword">func</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> fChan <span class="token operator">&lt;-</span> p<span class="token punctuation">.</span>salary <span class="token punctuation">}</span></span>
+<span class="line">	<span class="token keyword">return</span> <span class="token operator">&lt;-</span>fChan</span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token punctuation">(</span>p <span class="token operator">*</span>Person<span class="token punctuation">)</span> <span class="token function">String</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">string</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token keyword">return</span> <span class="token string">"Person - name is: "</span> <span class="token operator">+</span> p<span class="token punctuation">.</span>Name <span class="token operator">+</span> <span class="token string">" - salary is: "</span> <span class="token operator">+</span> strconv<span class="token punctuation">.</span><span class="token function">FormatFloat</span><span class="token punctuation">(</span>p<span class="token punctuation">.</span><span class="token function">Salary</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token char">'f'</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">64</span><span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">	bs <span class="token operator">:=</span> <span class="token function">NewPerson</span><span class="token punctuation">(</span><span class="token string">"Smith Bill"</span><span class="token punctuation">,</span> <span class="token number">2500.5</span><span class="token punctuation">)</span></span>
+<span class="line">	fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span>bs<span class="token punctuation">)</span></span>
+<span class="line">	bs<span class="token punctuation">.</span><span class="token function">SetSalary</span><span class="token punctuation">(</span><span class="token number">4000.25</span><span class="token punctuation">)</span></span>
+<span class="line">	fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"Salary changed:"</span><span class="token punctuation">)</span></span>
+<span class="line">	fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span>bs<span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>输出：</p>
+<div class="language-text line-numbers-mode" data-highlighter="prismjs" data-ext="text" data-title="text"><pre v-pre><code><span class="line">Person - name is: Smith Bill - salary is: 2500.50</span>
+<span class="line">Salary changed:</span>
+<span class="line">Person - name is: Smith Bill - salary is: 4000.25</span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><h2 id="链接" tabindex="-1"><a class="header-anchor" href="#链接"><span>链接</span></a></h2>
+<ul>
+<li><RouteLink to="/chapter-3/directory.html">目录</RouteLink></li>
+<li>上一节：<RouteLink to="/chapter-3/14.16.html">对Go协程进行基准测试</RouteLink></li>
+<li>下一章：<RouteLink to="/chapter-3/15.0.html">网络，模板和网页应用</RouteLink></li>
+</ul>
+</div></template>
+
+

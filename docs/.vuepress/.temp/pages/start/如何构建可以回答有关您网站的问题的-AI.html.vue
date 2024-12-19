@@ -1,0 +1,259 @@
+<template><div><h1 id="如何构建可以回答有关您网站的问题的-ai" tabindex="-1"><a class="header-anchor" href="#如何构建可以回答有关您网站的问题的-ai"><span><a href="https://platform.openai.com/docs/tutorials/web-qa-embeddings/how-to-build-an-ai-that-can-answer-questions-about-your-website" target="_blank" rel="noopener noreferrer">如何构建可以回答有关您网站的问题的 AI</a></span></a></h1>
+<p>本教程介绍了一个简单的网站抓取示例（在本示例中为 OpenAI 网站），使用<a href="https://platform.openai.com/docs/guides/embeddings" target="_blank" rel="noopener noreferrer">Embeddings API</a>将抓取的页面转换为嵌入，然后创建一个基本的搜索功能，允许用户询问有关嵌入信息的问题. 这旨在成为使用自定义知识库的更复杂应用程序的起点。</p>
+<h2 id="入门" tabindex="-1"><a class="header-anchor" href="#入门"><span>入门</span></a></h2>
+<p>Python 和 GitHub 的一些基础知识对本教程很有帮助。在深入研究之前，请确保<a href="https://platform.openai.com/docs/api-reference/introduction" target="_blank" rel="noopener noreferrer">设置一个 OpenAI API 密钥</a>并完成<RouteLink to="/start/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B.html">快速入门教程</RouteLink>。这将为如何充分发挥 API 的潜力提供良好的直觉。</p>
+<p>Python 与 OpenAI、Pandas、transformers、NumPy 和其他流行的程序包一起用作主要的编程语言。如果您在学习本教程时遇到任何问题，请在<a href="https://community.openai.com/" target="_blank" rel="noopener noreferrer">OpenAI 社区论坛</a>上提问。</p>
+<p><a href="https://github.com/openai/openai-cookbook/tree/main/solutions/web_crawl_Q%26A" target="_blank" rel="noopener noreferrer">要从代码开始，请在 GitHub 上</a>克隆本教程的完整代码。或者，跟随并将每个部分复制到 Jupyter 笔记本中并逐步运行代码，或者只是阅读。避免任何问题的一个好方法是设置一个新的虚拟环境并通过运行以下命令安装所需的包：</p>
+<div class="language-bash line-numbers-mode" data-highlighter="prismjs" data-ext="sh" data-title="sh"><pre v-pre><code><span class="line">python <span class="token parameter variable">-m</span> venv <span class="token function">env</span></span>
+<span class="line"></span>
+<span class="line"><span class="token builtin class-name">source</span> env/bin/activate</span>
+<span class="line"></span>
+<span class="line">pip <span class="token function">install</span> <span class="token parameter variable">-r</span> requirements.txt</span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><h2 id="设置网络爬虫" tabindex="-1"><a class="header-anchor" href="#设置网络爬虫"><span>设置网络爬虫</span></a></h2>
+<p>本教程的主要重点是 OpenAI API，因此如果您愿意，可以跳过有关如何创建网络爬虫的上下文并直接<a href="https://github.com/openai/openai-cookbook/tree/main/solutions/web_crawl_Q%26A" target="_blank" rel="noopener noreferrer">下载源代码</a>。否则，请展开下面的部分以完成抓取机制的实施。</p>
+<h3 id="了解如何构建网络爬虫" tabindex="-1"><a class="header-anchor" href="#了解如何构建网络爬虫"><span>了解如何构建网络爬虫</span></a></h3>
+<h4 id="构建嵌入索引" tabindex="-1"><a class="header-anchor" href="#构建嵌入索引"><span>构建嵌入索引</span></a></h4>
+<blockquote>
+<p>以文本形式获取数据是使用嵌入的第一步。本教程通过爬取 OpenAI 网站创建一组新数据，您也可以将这种技术用于您自己的公司或个人网站</p>
+<p><a href="https://github.com/openai/openai-cookbook/tree/main/solutions/web_crawl_Q%26A" target="_blank" rel="noopener noreferrer">查看源代码</a></p>
+</blockquote>
+<img src="https://cdn.openai.com/API/docs/images/tutorials/web-qa/DALL-E-woman-turning-a-stack-of-papers-into-numbers-pixel-art.png" alt="DALL-E：女人把一叠纸变成数字像素艺术" style="zoom:25%;" />
+<p>CSV 是存储嵌入的常用格式。您可以通过将原始文本文件（位于文本目录中）转换为 Pandas 数据帧来将此格式与 Python 结合使用。Pandas 是一个流行的开源库，可帮助您处理表格数据（存储在行和列中的数据）。</p>
+<p>空白空行会使文本文件混乱并使它们更难处理。一个简单的函数可以删除这些行并整理文件。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">def</span> <span class="token function">remove_newlines</span><span class="token punctuation">(</span>serie<span class="token punctuation">)</span><span class="token punctuation">:</span></span>
+<span class="line">    serie <span class="token operator">=</span> serie<span class="token punctuation">.</span><span class="token builtin">str</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'\n'</span><span class="token punctuation">,</span> <span class="token string">' '</span><span class="token punctuation">)</span></span>
+<span class="line">    serie <span class="token operator">=</span> serie<span class="token punctuation">.</span><span class="token builtin">str</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'\\n'</span><span class="token punctuation">,</span> <span class="token string">' '</span><span class="token punctuation">)</span></span>
+<span class="line">    serie <span class="token operator">=</span> serie<span class="token punctuation">.</span><span class="token builtin">str</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'  '</span><span class="token punctuation">,</span> <span class="token string">' '</span><span class="token punctuation">)</span></span>
+<span class="line">    serie <span class="token operator">=</span> serie<span class="token punctuation">.</span><span class="token builtin">str</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'  '</span><span class="token punctuation">,</span> <span class="token string">' '</span><span class="token punctuation">)</span></span>
+<span class="line">    <span class="token keyword">return</span> serie</span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>将文本转换为 CSV 需要循环访问之前创建的文本目录中的文本文件。打开每个文件后，删除多余的间距并将修改后的文本附加到列表中。然后，将删除了新行的文本添加到空的 Pandas 数据框中，并将数据框写入 CSV 文件。</p>
+<p>额外的间距和新行会使文本混乱并使嵌入过程复杂化。此处使用的代码有助于删除其中一些字符，但您可能会发现第 3 方库或其他方法有助于删除更多不必要的字符。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">import</span> pandas <span class="token keyword">as</span> pd</span>
+<span class="line"></span>
+<span class="line"><span class="token comment">#  创建一个列表来存储文本文件</span></span>
+<span class="line">texts<span class="token operator">=</span><span class="token punctuation">[</span><span class="token punctuation">]</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment"># 获取text目录下的所有文本文件</span></span>
+<span class="line"><span class="token keyword">for</span> <span class="token builtin">file</span> <span class="token keyword">in</span> os<span class="token punctuation">.</span>listdir<span class="token punctuation">(</span><span class="token string">"text/"</span> <span class="token operator">+</span> domain <span class="token operator">+</span> <span class="token string">"/"</span><span class="token punctuation">)</span><span class="token punctuation">:</span></span>
+<span class="line"></span>
+<span class="line">    <span class="token comment"># 打开文件并读取文本</span></span>
+<span class="line">    <span class="token keyword">with</span> <span class="token builtin">open</span><span class="token punctuation">(</span><span class="token string">"text/"</span> <span class="token operator">+</span> domain <span class="token operator">+</span> <span class="token string">"/"</span> <span class="token operator">+</span> <span class="token builtin">file</span><span class="token punctuation">,</span> <span class="token string">"r"</span><span class="token punctuation">,</span> encoding<span class="token operator">=</span><span class="token string">"UTF-8"</span><span class="token punctuation">)</span> <span class="token keyword">as</span> f<span class="token punctuation">:</span></span>
+<span class="line">        text <span class="token operator">=</span> f<span class="token punctuation">.</span>read<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">        <span class="token comment"># 省略前 11 行和后 4 行，然后将 -、_ 和 #update 替换为空格。</span></span>
+<span class="line">        texts<span class="token punctuation">.</span>append<span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token builtin">file</span><span class="token punctuation">[</span><span class="token number">11</span><span class="token punctuation">:</span><span class="token operator">-</span><span class="token number">4</span><span class="token punctuation">]</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'-'</span><span class="token punctuation">,</span><span class="token string">' '</span><span class="token punctuation">)</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'_'</span><span class="token punctuation">,</span> <span class="token string">' '</span><span class="token punctuation">)</span><span class="token punctuation">.</span>replace<span class="token punctuation">(</span><span class="token string">'#update'</span><span class="token punctuation">,</span><span class="token string">''</span><span class="token punctuation">)</span><span class="token punctuation">,</span> text<span class="token punctuation">)</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment"># 从文本列表中创建一个数据框</span></span>
+<span class="line">df <span class="token operator">=</span> pd<span class="token punctuation">.</span>DataFrame<span class="token punctuation">(</span>texts<span class="token punctuation">,</span> columns <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'fname'</span><span class="token punctuation">,</span> <span class="token string">'text'</span><span class="token punctuation">]</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment"># 将文本列设置为删除换行符的原始文本</span></span>
+<span class="line">df<span class="token punctuation">[</span><span class="token string">'text'</span><span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">.</span>fname <span class="token operator">+</span> <span class="token string">". "</span> <span class="token operator">+</span> remove_newlines<span class="token punctuation">(</span>df<span class="token punctuation">.</span>text<span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">.</span>to_csv<span class="token punctuation">(</span><span class="token string">'processed/scraped.csv'</span><span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">.</span>head<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>将原始文本保存到 CSV 文件后的下一步是标记化。此过程通过分解句子和单词将输入文本拆分为标记。<a href="https://platform.openai.com/tokenizer" target="_blank" rel="noopener noreferrer">通过查看</a>文档中的 Tokenizer可以看到对此的可视化演示。</p>
+<blockquote>
+<p>一个有用的经验法则是，对于普通英文文本，一个标记通常对应于 ~4 个字符的文本。这相当于大约 ¾ 个单词（因此 100 个标记 ~= 75 个单词）。</p>
+</blockquote>
+<p>API 对嵌入的输入标记的最大数量有限制。要保持在限制以下，CSV 文件中的文本需要分成多行。将首先记录每一行的现有长度，以确定需要拆分哪些行。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">import</span> tiktoken</span>
+<span class="line"></span>
+<span class="line"><span class="token comment"># 加载设计用于 ada-002 模型的 cl100k_base 分词器</span></span>
+<span class="line">tokenizer <span class="token operator">=</span> tiktoken<span class="token punctuation">.</span>get_encoding<span class="token punctuation">(</span><span class="token string">"cl100k_base"</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">df <span class="token operator">=</span> pd<span class="token punctuation">.</span>read_csv<span class="token punctuation">(</span><span class="token string">'processed/scraped.csv'</span><span class="token punctuation">,</span> index_col<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">.</span>columns <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'title'</span><span class="token punctuation">,</span> <span class="token string">'text'</span><span class="token punctuation">]</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment"># 标记文本并将标记数保存到新列</span></span>
+<span class="line">df<span class="token punctuation">[</span><span class="token string">'n_tokens'</span><span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">.</span>text<span class="token punctuation">.</span><span class="token builtin">apply</span><span class="token punctuation">(</span><span class="token keyword">lambda</span> x<span class="token punctuation">:</span> <span class="token builtin">len</span><span class="token punctuation">(</span>tokenizer<span class="token punctuation">.</span>encode<span class="token punctuation">(</span>x<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line"><span class="token comment"># 使用直方图可视化每行标记数量的分布</span></span>
+<span class="line">df<span class="token punctuation">.</span>n_tokens<span class="token punctuation">.</span>hist<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p><img src="https://cdn.openai.com/API/docs/images/tutorials/web-qa/embeddings-initial-histrogram.png" alt="嵌入直方图"></p>
+<p>最新的嵌入模型可以处理多达 8191 个输入标记的输入，因此大多数行不需要任何分块，但对于每个被抓取的子页面来说可能并非如此，因此下一个代码块会将较长的行拆分为较小的块。</p>
+<div class="language-Python line-numbers-mode" data-highlighter="prismjs" data-ext="Python" data-title="Python"><pre v-pre><code><span class="line">max_tokens = 500</span>
+<span class="line"></span>
+<span class="line"># 将文本拆分为最大数量的标记块的函数</span>
+<span class="line">def split_into_many(text, max_tokens = max_tokens):</span>
+<span class="line"></span>
+<span class="line">    # 将文本拆分成句子</span>
+<span class="line">    sentences = text.split('. ')</span>
+<span class="line"></span>
+<span class="line">    # 获取每个句子的标记个数</span>
+<span class="line">    n_tokens = [len(tokenizer.encode(&quot; &quot; + sentence)) for sentence in sentences]</span>
+<span class="line">    </span>
+<span class="line">    chunks = []</span>
+<span class="line">    tokens_so_far = 0</span>
+<span class="line">    chunk = []</span>
+<span class="line"></span>
+<span class="line">    # 遍历在一个元组中连接在一起的句子和标记</span>
+<span class="line">    for sentence, token in zip(sentences, n_tokens):</span>
+<span class="line"></span>
+<span class="line">        # 如果到目前为止的标记数加上当前句子中的标记数更大</span>
+<span class="line">        # 超过最大标记数，然后将块添加到块列表并重置</span>
+<span class="line">        # 到目前为止的块和标记</span>
+<span class="line">        if tokens_so_far + token &gt; max_tokens:</span>
+<span class="line">            chunks.append(&quot;. &quot;.join(chunk) + &quot;.&quot;)</span>
+<span class="line">            chunk = []</span>
+<span class="line">            tokens_so_far = 0</span>
+<span class="line"></span>
+<span class="line">        # 如果当前句子中的标记个数大于最大个数</span>
+<span class="line">        # 标记, 进入下一句</span>
+<span class="line">        if token &gt; max_tokens:</span>
+<span class="line">            continue</span>
+<span class="line"></span>
+<span class="line">        # 否则，将句子添加到块中，并将标记数添加到总数中</span>
+<span class="line">        chunk.append(sentence)</span>
+<span class="line">        tokens_so_far += token + 1</span>
+<span class="line"></span>
+<span class="line">    return chunks</span>
+<span class="line">    </span>
+<span class="line"></span>
+<span class="line">shortened = []</span>
+<span class="line"></span>
+<span class="line">#  循环遍历 dataframe</span>
+<span class="line">for row in df.iterrows():</span>
+<span class="line"></span>
+<span class="line">    # 如果文本为无，则转到下一行</span>
+<span class="line">    if row[1]['text'] is None:</span>
+<span class="line">        continue</span>
+<span class="line"></span>
+<span class="line">    # 如果标记数大于最大标记数，将文本拆分成块</span>
+<span class="line">    if row[1]['n_tokens'] &gt; max_tokens:</span>
+<span class="line">        shortened += split_into_many(row[1]['text'])</span>
+<span class="line">    </span>
+<span class="line">    # 否则，将文本添加到缩短文本列表中</span>
+<span class="line">    else:</span>
+<span class="line">        shortened.append( row[1]['text'] )</span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>再次可视化更新后的直方图有助于确认行是否已成功拆分为缩短的部分。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line">df <span class="token operator">=</span> pd<span class="token punctuation">.</span>DataFrame<span class="token punctuation">(</span>shortened<span class="token punctuation">,</span> columns <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'text'</span><span class="token punctuation">]</span><span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">[</span><span class="token string">'n_tokens'</span><span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">.</span>text<span class="token punctuation">.</span><span class="token builtin">apply</span><span class="token punctuation">(</span><span class="token keyword">lambda</span> x<span class="token punctuation">:</span> <span class="token builtin">len</span><span class="token punctuation">(</span>tokenizer<span class="token punctuation">.</span>encode<span class="token punctuation">(</span>x<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">.</span>n_tokens<span class="token punctuation">.</span>hist<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p><img src="https://cdn.openai.com/API/docs/images/tutorials/web-qa/embeddings-tokenized-output.png" alt="嵌入标记化输出"></p>
+<p>内容现在被分解成更小的块，可以向 OpenAI API 发送一个简单的请求，指定使用新的 <code v-pre>text-embedding-ada-002</code> 模型来创建嵌入：</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">import</span> openai</span>
+<span class="line"></span>
+<span class="line">df<span class="token punctuation">[</span><span class="token string">'embeddings'</span><span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">.</span>text<span class="token punctuation">.</span><span class="token builtin">apply</span><span class="token punctuation">(</span><span class="token keyword">lambda</span> x<span class="token punctuation">:</span> openai<span class="token punctuation">.</span>Embedding<span class="token punctuation">.</span>create<span class="token punctuation">(</span><span class="token builtin">input</span><span class="token operator">=</span>x<span class="token punctuation">,</span> engine<span class="token operator">=</span><span class="token string">'text-embedding-ada-002'</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'embedding'</span><span class="token punctuation">]</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">df<span class="token punctuation">.</span>to_csv<span class="token punctuation">(</span><span class="token string">'processed/embeddings.csv'</span><span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">.</span>head<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>这大约需要 3-5 分钟，但之后您就可以使用嵌入了！</p>
+<h4 id="使用嵌入构建问答系统" tabindex="-1"><a class="header-anchor" href="#使用嵌入构建问答系统"><span>使用嵌入构建问答系统</span></a></h4>
+<img src="https://cdn.openai.com/API/docs/images/tutorials/web-qa/DALL-E-friendly-robot-question-and-answer-system-pixel-art.png" alt="DALL-E：友好的机器人问答系统像素艺术" style="zoom:25%;" />
+<blockquote>
+<p>嵌入已准备就绪，此过程的最后一步是创建一个简单的问答系统。这将接受用户的问题，创建它的嵌入，并将其与现有嵌入进行比较，以从抓取的网站中检索最相关的文本。然后，<code v-pre>text-davinci-003</code> 模型将根据检索到的文本生成听起来自然的答案。</p>
+</blockquote>
+<hr>
+<p>将嵌入转换为 NumPy 数组是第一步，考虑到在 NumPy 数组上运行的许多可用函数，这将在如何使用它方面提供更大的灵活性。它还会将维度展平为一维，这是许多后续操作所需的格式。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">import</span> numpy <span class="token keyword">as</span> np</span>
+<span class="line"><span class="token keyword">from</span> openai<span class="token punctuation">.</span>embeddings_utils <span class="token keyword">import</span> distances_from_embeddings</span>
+<span class="line"></span>
+<span class="line">df<span class="token operator">=</span>pd<span class="token punctuation">.</span>read_csv<span class="token punctuation">(</span><span class="token string">'processed/embeddings.csv'</span><span class="token punctuation">,</span> index_col<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">)</span></span>
+<span class="line">df<span class="token punctuation">[</span><span class="token string">'embeddings'</span><span class="token punctuation">]</span> <span class="token operator">=</span> df<span class="token punctuation">[</span><span class="token string">'embeddings'</span><span class="token punctuation">]</span><span class="token punctuation">.</span><span class="token builtin">apply</span><span class="token punctuation">(</span><span class="token builtin">eval</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token builtin">apply</span><span class="token punctuation">(</span>np<span class="token punctuation">.</span>array<span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">df<span class="token punctuation">.</span>head<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>现在数据已准备就绪，需要将问题转换为具有简单函数的嵌入。这很重要，因为嵌入搜索使用余弦距离比较数字向量（这是原始文本的转换）。这些向量可能相关，如果它们的余弦距离接近，则可能是问题的答案。OpenAI python 包有一个内置<code v-pre>distances_from_embeddings</code>函数，在这里很有用。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">def</span> <span class="token function">create_context</span><span class="token punctuation">(</span></span>
+<span class="line">    question<span class="token punctuation">,</span> df<span class="token punctuation">,</span> max_len<span class="token operator">=</span><span class="token number">1800</span><span class="token punctuation">,</span> size<span class="token operator">=</span><span class="token string">"ada"</span></span>
+<span class="line"><span class="token punctuation">)</span><span class="token punctuation">:</span></span>
+<span class="line">    <span class="token triple-quoted-string string">"""</span>
+<span class="line">    通过从数据框中找到最相似的上下文来为问题创建上下文</span>
+<span class="line">    """</span></span>
+<span class="line"></span>
+<span class="line">    <span class="token comment"># 获取问题的 embedding</span></span>
+<span class="line">    q_embeddings <span class="token operator">=</span> openai<span class="token punctuation">.</span>Embedding<span class="token punctuation">.</span>create<span class="token punctuation">(</span><span class="token builtin">input</span><span class="token operator">=</span>question<span class="token punctuation">,</span> engine<span class="token operator">=</span><span class="token string">'text-embedding-ada-002'</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token string">'data'</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">'embedding'</span><span class="token punctuation">]</span></span>
+<span class="line"></span>
+<span class="line">    <span class="token comment">#  获取与 embedding 的距离</span></span>
+<span class="line">    df<span class="token punctuation">[</span><span class="token string">'distances'</span><span class="token punctuation">]</span> <span class="token operator">=</span> distances_from_embeddings<span class="token punctuation">(</span>q_embeddings<span class="token punctuation">,</span> df<span class="token punctuation">[</span><span class="token string">'embeddings'</span><span class="token punctuation">]</span><span class="token punctuation">.</span>values<span class="token punctuation">,</span> distance_metric<span class="token operator">=</span><span class="token string">'cosine'</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line">    returns <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">]</span></span>
+<span class="line">    cur_len <span class="token operator">=</span> <span class="token number">0</span></span>
+<span class="line"></span>
+<span class="line">    <span class="token comment"># 按距离排序，将文本添加到上下文中，直到上下文太长</span></span>
+<span class="line">    <span class="token keyword">for</span> i<span class="token punctuation">,</span> row <span class="token keyword">in</span> df<span class="token punctuation">.</span>sort_values<span class="token punctuation">(</span><span class="token string">'distances'</span><span class="token punctuation">,</span> ascending<span class="token operator">=</span><span class="token boolean">True</span><span class="token punctuation">)</span><span class="token punctuation">.</span>iterrows<span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">:</span></span>
+<span class="line">        </span>
+<span class="line">        <span class="token comment"># 将文本的长度添加到当前长度</span></span>
+<span class="line">        cur_len <span class="token operator">+=</span> row<span class="token punctuation">[</span><span class="token string">'n_tokens'</span><span class="token punctuation">]</span> <span class="token operator">+</span> <span class="token number">4</span></span>
+<span class="line">        </span>
+<span class="line">        <span class="token comment"># 如果上下文太长，中断</span></span>
+<span class="line">        <span class="token keyword">if</span> cur_len <span class="token operator">></span> max_len<span class="token punctuation">:</span></span>
+<span class="line">            <span class="token keyword">break</span></span>
+<span class="line">        </span>
+<span class="line">        <span class="token comment"># 否则将其添加到要返回的文本中</span></span>
+<span class="line">        returns<span class="token punctuation">.</span>append<span class="token punctuation">(</span>row<span class="token punctuation">[</span><span class="token string">"text"</span><span class="token punctuation">]</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">    <span class="token comment"># 返回内容</span></span>
+<span class="line">    <span class="token keyword">return</span> <span class="token string">"\n\n###\n\n"</span><span class="token punctuation">.</span>join<span class="token punctuation">(</span>returns<span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>文本被分解成更小的标记集，因此按升序循环并继续添加文本是确保完整答案的关键步骤。如果返回的内容多于所需，也可以将 max_len 修改为更小的值。</p>
+<p>上一步只检索了与问题语义相关的文本块，因此它们可能包含答案，但不能保证。通过返回前 5 个最有可能的结果，可以进一步增加找到答案的机会。</p>
+<p>然后，回答提示将尝试从检索到的上下文中提取相关事实，以便形成连贯的答案。如果没有相关答案，提示将返回“我不知道”。</p>
+<p>可以使用完成端点创建问题的真实答案<code v-pre>text-davinci-003</code>。</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line"><span class="token keyword">def</span> <span class="token function">answer_question</span><span class="token punctuation">(</span></span>
+<span class="line">    df<span class="token punctuation">,</span></span>
+<span class="line">    model<span class="token operator">=</span><span class="token string">"text-davinci-003"</span><span class="token punctuation">,</span></span>
+<span class="line">    question<span class="token operator">=</span><span class="token string">"可以在没有人工审核的情况下将模型输出发布到 Twitter 吗？"</span><span class="token punctuation">,</span></span>
+<span class="line">    max_len<span class="token operator">=</span><span class="token number">1800</span><span class="token punctuation">,</span></span>
+<span class="line">    size<span class="token operator">=</span><span class="token string">"ada"</span><span class="token punctuation">,</span></span>
+<span class="line">    debug<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">,</span></span>
+<span class="line">    max_tokens<span class="token operator">=</span><span class="token number">150</span><span class="token punctuation">,</span></span>
+<span class="line">    stop_sequence<span class="token operator">=</span><span class="token boolean">None</span></span>
+<span class="line"><span class="token punctuation">)</span><span class="token punctuation">:</span></span>
+<span class="line">    <span class="token triple-quoted-string string">"""</span>
+<span class="line">    根据数据框文本中最相似的上下文回答问题</span>
+<span class="line">    """</span></span>
+<span class="line">    context <span class="token operator">=</span> create_context<span class="token punctuation">(</span></span>
+<span class="line">        question<span class="token punctuation">,</span></span>
+<span class="line">        df<span class="token punctuation">,</span></span>
+<span class="line">        max_len<span class="token operator">=</span>max_len<span class="token punctuation">,</span></span>
+<span class="line">        size<span class="token operator">=</span>size<span class="token punctuation">,</span></span>
+<span class="line">    <span class="token punctuation">)</span></span>
+<span class="line">    <span class="token comment"># 如果调试，打印原始模型响应</span></span>
+<span class="line">    <span class="token keyword">if</span> debug<span class="token punctuation">:</span></span>
+<span class="line">        <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"Context:\n"</span> <span class="token operator">+</span> context<span class="token punctuation">)</span></span>
+<span class="line">        <span class="token keyword">print</span><span class="token punctuation">(</span><span class="token string">"\n\n"</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">    <span class="token keyword">try</span><span class="token punctuation">:</span></span>
+<span class="line">        <span class="token comment"># 使用问题和上下文创建一个补全</span></span>
+<span class="line">        response <span class="token operator">=</span> openai<span class="token punctuation">.</span>Completion<span class="token punctuation">.</span>create<span class="token punctuation">(</span></span>
+<span class="line">            prompt<span class="token operator">=</span><span class="token string-interpolation"><span class="token string">f"根据下面的上下文回答问题，如果根据上下文不能回答问题，就说“我不知道”\n\n上下文：</span><span class="token interpolation"><span class="token punctuation">{</span>context<span class="token punctuation">}</span></span><span class="token string">\n\n- --\n\n问题：</span><span class="token interpolation"><span class="token punctuation">{</span>问题<span class="token punctuation">}</span></span><span class="token string">\n答案："</span></span><span class="token punctuation">,</span></span>
+<span class="line">            temperature<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">,</span></span>
+<span class="line">            max_tokens<span class="token operator">=</span>max_tokens<span class="token punctuation">,</span></span>
+<span class="line">            top_p<span class="token operator">=</span><span class="token number">1</span><span class="token punctuation">,</span></span>
+<span class="line">            frequency_penalty<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">,</span></span>
+<span class="line">            presence_penalty<span class="token operator">=</span><span class="token number">0</span><span class="token punctuation">,</span></span>
+<span class="line">            stop<span class="token operator">=</span>stop_sequence<span class="token punctuation">,</span></span>
+<span class="line">            model<span class="token operator">=</span>model<span class="token punctuation">,</span></span>
+<span class="line">        <span class="token punctuation">)</span></span>
+<span class="line">        <span class="token keyword">return</span> response<span class="token punctuation">[</span><span class="token string">"choices"</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token string">"text"</span><span class="token punctuation">]</span><span class="token punctuation">.</span>strip<span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line">    <span class="token keyword">except</span> Exception <span class="token keyword">as</span> e<span class="token punctuation">:</span></span>
+<span class="line">        <span class="token keyword">print</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span></span>
+<span class="line">        <span class="token keyword">return</span> <span class="token string">""</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>完成了！一个工作的 Q/A 系统已经准备就绪，该系统具有从 OpenAI 网站嵌入的知识。可以进行一些快速测试以查看输出质量：</p>
+<div class="language-python line-numbers-mode" data-highlighter="prismjs" data-ext="py" data-title="py"><pre v-pre><code><span class="line">answer_question<span class="token punctuation">(</span>df<span class="token punctuation">,</span> question<span class="token operator">=</span><span class="token string">"今天是什么日子？"</span><span class="token punctuation">,</span> debug<span class="token operator">=</span><span class="token boolean">False</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">answer_question<span class="token punctuation">(</span>df<span class="token punctuation">,</span> question<span class="token operator">=</span><span class="token string">"我们最新的嵌入模型是什么?"</span><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line">answer_question<span class="token punctuation">(</span>df<span class="token punctuation">,</span> question<span class="token operator">=</span><span class="token string">"什么是 ChatGPT ?"</span><span class="token punctuation">)</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>响应将类似于以下内容：</p>
+<div class="language-response line-numbers-mode" data-highlighter="prismjs" data-ext="response" data-title="response"><pre v-pre><code><span class="line">&quot;我不知道。&quot;</span>
+<span class="line"></span>
+<span class="line">'最新的嵌入模型是 text-embedding-ada-002。'</span>
+<span class="line"></span>
+<span class="line">‘ChatGPT 是一种训练有素的以对话方式进行交互的模型。它能够回答后续问题、承认错误、挑战不正确的前提并拒绝不适当的请求'</span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p>如果系统无法回答预期的问题，则值得搜索原始文本文件以查看预期已知的信息是否最终被嵌入。最初完成的爬网过程被设置为跳过所提供的原始域之外的站点，因此如果有子域设置，它可能不知道这些信息。</p>
+<p>目前，每次都传入数据框来回答问题。对于更多的生产工作流程，应该使用<a href="(https://platform.openai.com/docs/guides/embeddings/how-can-i-retrieve-k-nearest-embedding-vectors-quickly)">矢量数据库</a>解决方案而不是将嵌入存储在 CSV 文件中，但当前的方法是原型制作的一个很好的选择。</p>
+</div></template>
+
+

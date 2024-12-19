@@ -1,0 +1,79 @@
+<template><div><h1 id="_11-6-使用方法集与接口" tabindex="-1"><a class="header-anchor" href="#_11-6-使用方法集与接口"><span>11.6 使用方法集与接口</span></a></h1>
+<p>在<RouteLink to="/chapter-2/10.6.html">第 10.6.3 节</RouteLink>及例子 <a href="examples%5Cchapter_10%5Cmethodset1.go">methodset1.go</a> 中我们看到，作用于变量上的方法实际上是不区分变量到底是指针还是值的。当碰到接口类型值时，这会变得有点复杂，原因是接口变量中存储的具体值是不可寻址的，幸运的是，如果使用不当编译器会给出错误。考虑下面的程序：</p>
+<p>示例 11.5 <a href="examples/chapter_11/methodset2.go">methodset2.go</a>：</p>
+<div class="language-go line-numbers-mode" data-highlighter="prismjs" data-ext="go" data-title="go"><pre v-pre><code><span class="line"><span class="token keyword">package</span> main</span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">import</span> <span class="token punctuation">(</span></span>
+<span class="line">	<span class="token string">"fmt"</span></span>
+<span class="line"><span class="token punctuation">)</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">type</span> List <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">int</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token punctuation">(</span>l List<span class="token punctuation">)</span> <span class="token function">Len</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">int</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token keyword">return</span> <span class="token function">len</span><span class="token punctuation">(</span>l<span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token punctuation">(</span>l <span class="token operator">*</span>List<span class="token punctuation">)</span> <span class="token function">Append</span><span class="token punctuation">(</span>val <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token operator">*</span>l <span class="token operator">=</span> <span class="token function">append</span><span class="token punctuation">(</span><span class="token operator">*</span>l<span class="token punctuation">,</span> val<span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">type</span> Appender <span class="token keyword">interface</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token function">Append</span><span class="token punctuation">(</span><span class="token builtin">int</span><span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">CountInto</span><span class="token punctuation">(</span>a Appender<span class="token punctuation">,</span> start<span class="token punctuation">,</span> end <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token keyword">for</span> i <span class="token operator">:=</span> start<span class="token punctuation">;</span> i <span class="token operator">&lt;=</span> end<span class="token punctuation">;</span> i<span class="token operator">++</span> <span class="token punctuation">{</span></span>
+<span class="line">		a<span class="token punctuation">.</span><span class="token function">Append</span><span class="token punctuation">(</span>i<span class="token punctuation">)</span></span>
+<span class="line">	<span class="token punctuation">}</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">type</span> Lener <span class="token keyword">interface</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token function">Len</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">int</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">LongEnough</span><span class="token punctuation">(</span>l Lener<span class="token punctuation">)</span> <span class="token builtin">bool</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token keyword">return</span> l<span class="token punctuation">.</span><span class="token function">Len</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">*</span><span class="token number">10</span> <span class="token operator">></span> <span class="token number">42</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">	<span class="token comment">// A bare value</span></span>
+<span class="line">	<span class="token keyword">var</span> lst List</span>
+<span class="line">	<span class="token comment">// compiler error:</span></span>
+<span class="line">	<span class="token comment">// cannot use lst (type List) as type Appender in argument to CountInto:</span></span>
+<span class="line">	<span class="token comment">//       List does not implement Appender (Append method has pointer receiver)</span></span>
+<span class="line">	<span class="token comment">// CountInto(lst, 1, 10)</span></span>
+<span class="line">	<span class="token keyword">if</span> <span class="token function">LongEnough</span><span class="token punctuation">(</span>lst<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// VALID: Identical receiver type</span></span>
+<span class="line">		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"- lst is long enough\n"</span><span class="token punctuation">)</span></span>
+<span class="line">	<span class="token punctuation">}</span></span>
+<span class="line"></span>
+<span class="line">	<span class="token comment">// A pointer value</span></span>
+<span class="line">	plst <span class="token operator">:=</span> <span class="token function">new</span><span class="token punctuation">(</span>List<span class="token punctuation">)</span></span>
+<span class="line">	<span class="token function">CountInto</span><span class="token punctuation">(</span>plst<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span> <span class="token comment">// VALID: Identical receiver type</span></span>
+<span class="line">	<span class="token keyword">if</span> <span class="token function">LongEnough</span><span class="token punctuation">(</span>plst<span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">		<span class="token comment">// VALID: a *List can be dereferenced for the receiver</span></span>
+<span class="line">		fmt<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">"- plst is long enough\n"</span><span class="token punctuation">)</span></span>
+<span class="line">	<span class="token punctuation">}</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p><strong>讨论</strong></p>
+<p>在 <code v-pre>lst</code> 上调用 <code v-pre>CountInto</code> 时会导致一个编译器错误，因为 <code v-pre>CountInto</code> 需要一个 <code v-pre>Appender</code>，而它的方法 <code v-pre>Append</code> 只定义在指针上。 在 <code v-pre>lst</code> 上调用 <code v-pre>LongEnough</code> 是可以的，因为 <code v-pre>Len</code> 定义在值上。</p>
+<p>在 <code v-pre>plst</code> 上调用 <code v-pre>CountInto</code> 是可以的，因为 <code v-pre>CountInto</code> 需要一个 <code v-pre>Appender</code>，并且它的方法 <code v-pre>Append</code> 定义在指针上。 在 <code v-pre>plst</code> 上调用 <code v-pre>LongEnough</code> 也是可以的，因为指针会被自动解引用。</p>
+<p><strong>总结</strong></p>
+<p>在接口上调用方法时，必须有和方法定义时相同的接收者类型或者是可以根据具体类型 <code v-pre>P</code> 直接辨识的：</p>
+<ul>
+<li>指针方法可以通过指针调用</li>
+<li>值方法可以通过值调用</li>
+<li>接收者是值的方法可以通过指针调用，因为指针会首先被解引用</li>
+<li>接收者是指针的方法不可以通过值调用，因为存储在接口中的值没有地址</li>
+</ul>
+<p>将一个值赋值给一个接口时，编译器会确保所有可能的接口方法都可以在此值上被调用，因此不正确的赋值在编译期就会失败。</p>
+<p><strong>译注</strong></p>
+<p>Go 语言规范定义了接口方法集的调用规则：</p>
+<ul>
+<li>类型 <code v-pre>*T</code> 的可调用方法集包含接受者为 <code v-pre>*T</code> 或 <code v-pre>T</code> 的所有方法集</li>
+<li>类型 <code v-pre>T</code> 的可调用方法集包含接受者为 <code v-pre>T</code> 的所有方法</li>
+<li>类型 <code v-pre>T</code> 的可调用方法集<strong>不</strong>包含接受者为 <code v-pre>*T</code> 的方法</li>
+</ul>
+</div></template>
+
+

@@ -1,0 +1,38 @@
+<template><div><h1 id="_16-6-使用指针指向接口类型" tabindex="-1"><a class="header-anchor" href="#_16-6-使用指针指向接口类型"><span>16.6 使用指针指向接口类型</span></a></h1>
+<p>查看如下程序：<code v-pre>nexter</code> 是一个接口类型，并且定义了一个 <code v-pre>next()</code> 方法读取下一字节。函数 <code v-pre>nextFew1</code> 将 <code v-pre>nexter</code> 接口作为参数并读取接下来的 <code v-pre>num</code> 个字节，并返回一个切片：这是正确做法。但是 <code v-pre>nextFew2</code> 使用一个指向 <code v-pre>nexter</code> 接口类型的指针作为参数传递给函数：当使用 <code v-pre>next()</code> 函数时，系统会给出一个编译错误：<strong><code v-pre>n.next undefined (type *nexter has no field or method next)</code></strong> （译者注：n.next 未定义（*nexter 类型没有 next 成员或 next 方法））</p>
+<p>例 16.1 <a href="examples/chapter_16/pointer_interface.go">pointer_interface.go</a> （不能通过编译）:</p>
+<div class="language-go line-numbers-mode" data-highlighter="prismjs" data-ext="go" data-title="go"><pre v-pre><code><span class="line"><span class="token keyword">package</span> main</span>
+<span class="line"><span class="token keyword">import</span> <span class="token punctuation">(</span></span>
+<span class="line">    <span class="token string">"fmt"</span></span>
+<span class="line"><span class="token punctuation">)</span></span>
+<span class="line"><span class="token keyword">type</span> nexter <span class="token keyword">interface</span> <span class="token punctuation">{</span></span>
+<span class="line">    <span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token builtin">byte</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">nextFew1</span><span class="token punctuation">(</span>n nexter<span class="token punctuation">,</span> num <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span> <span class="token punctuation">{</span></span>
+<span class="line">    <span class="token keyword">var</span> b <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span></span>
+<span class="line">    <span class="token keyword">for</span> i<span class="token operator">:=</span><span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> num<span class="token punctuation">;</span> i<span class="token operator">++</span> <span class="token punctuation">{</span></span>
+<span class="line">        b<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> n<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span></span>
+<span class="line">    <span class="token punctuation">}</span></span>
+<span class="line">    <span class="token keyword">return</span> b</span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">nextFew2</span><span class="token punctuation">(</span>n <span class="token operator">*</span>nexter<span class="token punctuation">,</span> num <span class="token builtin">int</span><span class="token punctuation">)</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span> <span class="token punctuation">{</span></span>
+<span class="line">    <span class="token keyword">var</span> b <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token builtin">byte</span></span>
+<span class="line">    <span class="token keyword">for</span> i<span class="token operator">:=</span><span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> num<span class="token punctuation">;</span> i<span class="token operator">++</span> <span class="token punctuation">{</span></span>
+<span class="line">        b<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> n<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comment">// 编译错误：n.next 未定义（*nexter 类型没有 next 成员或 next 方法）</span></span>
+<span class="line">    <span class="token punctuation">}</span></span>
+<span class="line">    <span class="token keyword">return</span> b</span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"><span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span></span>
+<span class="line">    fmt<span class="token punctuation">.</span><span class="token function">Println</span><span class="token punctuation">(</span><span class="token string">"Hello World!"</span><span class="token punctuation">)</span></span>
+<span class="line"><span class="token punctuation">}</span></span>
+<span class="line"></span></code></pre>
+<div class="line-numbers" aria-hidden="true" style="counter-reset:line-number 0"><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div><div class="line-number"></div></div></div><p><strong>永远不要使用一个指针指向一个接口类型，因为它已经是一个指针。</strong></p>
+<h2 id="链接" tabindex="-1"><a class="header-anchor" href="#链接"><span>链接</span></a></h2>
+<ul>
+<li><RouteLink to="/chapter-4/directory.html">目录</RouteLink></li>
+<li>上一节：<RouteLink to="/chapter-4/16.5.html">不需要将一个指向切片的指针传递给函数</RouteLink></li>
+<li>下一节：<RouteLink to="/chapter-4/16.7.html">使用值类型时误用指针</RouteLink></li>
+</ul>
+</div></template>
+
+
